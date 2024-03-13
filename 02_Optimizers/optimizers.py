@@ -3,6 +3,7 @@ import torch
 from torch import nn
 from torch.optim.optimizer import Optimizer
 
+# base class for Adam and extensions
 class GenericAdaptiveOptimizer(Optimizer):
     def __init__(self, params, defaults: Dict[str, any], lr: float, betas: Tuple[float, float], eps: float):
         '''
@@ -69,3 +70,44 @@ class GenericAdaptiveOptimizer(Optimizer):
                 
         return loss
 
+# L2 Weight decay
+class WeightDecay:
+    def __init__(self, weight_decay: float = 0., weight_decouple: bool = True, absolute: bool = False):
+        '''
+        Initialize
+            weight_decay: decay coefficient
+            weight_decouple: gradient에 weight decay를 더할지(normal optim update)
+            혹은 parameter로부터 직접 decay할지를 나타내는 flag
+            absolute: weight decay coefficient가 절대값인지를 나타내는 flag
+            이 옵션은 parameter로부터 직접 decay를 수행할 때만 유효
+        '''
+        
+        # check hyper-parameter
+        if weight_decay < 0.0:
+            raise ValueError(f'Invalid weight_decay value: {weight_decay}')
+        
+        self.weight_decay = weight_decay
+        self.weight_decouple = weight_decouple
+        self.absolute = absolute
+        
+    def defaults(self):
+        '''return defaults parameter groups'''
+        return dict(weight_decay=self.weight_decay)
+    
+    def __call__(self, param: torch.nn.Parameter, grad: torch.Tensor, group: Dict[str, any]):
+        '''perform weight decay and return gradient'''
+
+        if self.weight_decouple: # decay on the parameter directly
+            if self.absolute:
+                param.data.mul_(1.0 - group['weight_decay'])
+            else:
+                param.data.mul_(1.0 - group['lr'] * group['weight_decay'])
+                
+            return grad
+        else:
+            if group['weight_decay'] != 0:
+                
+                # add the weight decay to the gradient and return modified gradient
+                return grad.add(param.data, alpha=group['weight_decay'])
+            else:
+                return grad
