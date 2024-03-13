@@ -37,5 +37,35 @@ class GenericAdaptiveOptimizer(Optimizer):
         '''Take optimizer step on a parameter tensor'''
         pass
     
-    
-            
+    @torch.no_grad()
+    def step(self, closure=None):
+        '''Optimizer step: a template method for every Adam based optimizer needs'''
+        
+        # calculate loss
+        loss = None
+        if closure is not None:
+            with torch.enable_grad():
+                loss = closure()
+                
+        # iterate through the parameter groups
+        for group in self.param_groups:
+            for param in group['params']:
+                if param.grad is None:
+                    # skip if the parameter has no gradient
+                    continue
+                
+                # get the gradient tensor
+                grad = param.grad.data
+                
+                # get the state for the parameter
+                state = self.state[param]
+                
+                if len(state)==0:
+                    # initialize state if state is uninitialized
+                    self.init_state(state, group, param)
+                
+                # take the optimization step on the parameter
+                self.step_param(state, group, grad, param)
+                
+        return loss
+
