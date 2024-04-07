@@ -13,3 +13,7 @@ Starting from the basics of Pytorch Deep Learning
 #### <a href='https://github.com/KevinTheRainmaker/Pytorch_DeepLearning/blob/main/01_Pytorch_Basic/04_Training_Classifier.ipynb'>04) Training Classifier</a>
 
 #### <a href='https://github.com/KevinTheRainmaker/Pytorch_DeepLearning/blob/main/01_Pytorch_Basic/05_Visualize_with_TensorBoard.ipynb'>05) Visualize with TensorBoard</a>
+
+## 02. Optimizers
+
+#### <a href=https://github.com/KevinTheRainmaker/Pytorch_DeepLearning/blob/main/02_Optimizers/01_Adam.ipynb>01) Adam</a>
