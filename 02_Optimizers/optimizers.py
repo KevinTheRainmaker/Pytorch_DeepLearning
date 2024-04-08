@@ -1,6 +1,9 @@
-from typing import Dict, Tuple, Any
+from typing import Dict, Any, Tuple, Optional
+import math
+
 import torch
 from torch import nn
+from torch import Tensor
 from torch.optim.optimizer import Optimizer
 
 # base class for Adam and extensions
@@ -111,3 +114,119 @@ class WeightDecay:
                 return grad.add(param.data, alpha=group['weight_decay'])
             else:
                 return grad
+
+class Adam(GenericAdaptiveOptimizer):
+    def __init__(self, params, 
+                 lr: float = 1e-3,
+                 betas: Tuple[float, float] = (0.9, 0.999),
+                 eps: float = 1e-16,
+                 weight_decay: WeightDecay = WeightDecay(),
+                 optimized_update: bool = True,
+                 defaults: Optional[Dict[str, Any]] = None):
+        '''
+        Initialize the Optimizer
+            - params: the list of parameters
+            - lr: learning rate alpha
+            - betas: tuple of (beta_1, beta_2)
+            - eps: epsilon
+            - weight_decay: instance of class WeightDecay
+            - optimized_update: a flag whether to optimize the bias correction 
+                                of the second moment by doing it after adding epsilon
+            - defaults: a dict of default for group values
+        '''
+        defaults = {} if defaults is None else defaults
+        defaults.update(weight_decay.defaults())
+        super().__init__(params, defaults, lr, betas, eps)
+            
+        self.weight_decay = weight_decay
+        self.optimized_update = optimized_update
+    
+    def init_state(self, state: Dict[str, any],
+                   group: Dict[str, any],
+                   param: nn.Parameter):
+        '''
+        Initialize a parameter state
+            - state: the optimizer state of the parameter (tensor)
+            - group: stores optimizer attributes of the parameter group
+            - param: the parameter tensor theta at t-1
+        '''
+        state['step'] = 0 # the number of optimizer steps taken on t
+        # exponential moving avg of gradients, m_t
+        state['exp_avg'] = torch.zeros_like(param, memory_format=torch.preserve_format) 
+        # exponeitial moving avg of squared gradient values, v_t
+        state['exp_avg_sqrd'] = torch.zeros_like(param, memory_format=torch.preserve_format)
+    
+    def calc_mv(self, state: Dict[str, Any],
+                group: Dict[str, Any], grad: torch.Tensor):
+        '''
+        Calculate m_t and v_t
+            - state: the optimizer state of the parameter (tensor)
+            - group: stores optimizer attributes of the parameter group
+            - grad: current gradient tensor g_t for theta at t-1
+        '''
+        beta1, beta2 = group['betas']
+        m, v = state['exp_avg'], state['exp_avg_sqrd']
+        
+        # calculation of m_t (inplace calculation)
+        m.mul_(beta1).add_(grad, alpha=1-beta1)
+        # == beta1 * m + (1 - beta1) * grad
+        
+        # calculation of v_t
+        v.mul_(beta2).add_(grad**2, alpha=1-beta2)
+        
+        return m, v
+    
+    def get_lr(self, state: Dict[str, any], group: Dict[str, any]):
+        '''
+        returns the modified lr based on the state
+        '''
+        return group['lr']
+    
+    def update_adam(self, state: Dict[str, any],
+                    group: Dict[str, any],
+                    param: torch.nn.Parameter,
+                    m: torch.Tensor, v: torch.Tensor):
+        '''
+        Update the Adam parameter
+            - state: the optimizer state of the parameter (tensor)
+            - group: stores optimizer attributes of the parameter group
+            - param: the parameter tensor theta at t-1
+            - m, v: the uncorrected first and second moments m_t and v_t
+        '''
+        beta1, beta2 = group['betas']
+        
+        # bias correction term 1-beta1^t
+        bias_correction1 = 1 - beta1 ** state['step']
+        
+        # bias correction term 1-beta2^t
+        bias_correction2 = 1 - beta2 ** state['step']
+        
+        lr = self.get_lr(state, group)
+        
+        if self.optimized_update:
+            denominator = v.sqrt().add_(group['eps'])
+            step_size = lr * math.sqrt(bias_correction2) / bias_correction1
+        else:
+            # computation without optimization
+            denominator = (v.sqrt()/math.sqrt(bias_correction2)).add_(group['eps'])
+            step_size = lr / bias_correction1
+            
+        param.data.addcdiv_(m, denominator, value=-step_size)
+        
+    def step_param(self, state: Dict[str, Any], 
+                   group: Dict[str, Any], grad: Tensor, param: Tensor):
+        '''
+        Take an update step for a given parameter tensor
+            - state: the optimizer state of the parameter (tensor)
+            - group: stores optimizer attributes of the parameter group
+            - grad: current gradient tensor g_t for theta at t-1
+            - param: the parameter tensor theta at t-1
+        '''
+        grad = self.weight_decay(param, grad, group)
+        m, v = self.calc_mv(state, group, grad)
+        
+        # increment t
+        state['step'] += 1
+        
+        # perform adam update
+        self.update_adam(state, group, param, m, v)
