@@ -162,4 +162,4 @@ cython_debug/
 */data
 */model
 */runs/*/events.out.tfevents*
-
+*/logs
