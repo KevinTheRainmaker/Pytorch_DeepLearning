@@ -284,3 +284,39 @@ class AMSGrad(Adam):
             return m, v_max
         else:
             return m, v
+        
+class AdamWarmup(Adam):
+    def __init__(self, params, betas: Tuple[float, float] = (0.9, 0.999), 
+                 eps: float = 1e-16, weight_decay: WeightDecay = WeightDecay(), 
+                 optimized_update: bool = True, warmup: int = 0, 
+                 min_lr: float = 1e-8, max_lr: float = 1e-3,
+                 defaults: Dict[str, Any] | None = None):
+
+        '''
+        Initialize the Optimizer
+            - params: the list of parameters
+            - betas: tuple of (beta_1, beta_2)
+            - lr: (maximum) learning rate alpha
+            - eps: epsilon
+            - weight_decay: instance of class WeightDecay
+            - optimized_update: a flag whether to optimize the bias correction 
+                                of the second moment by doing it after adding epsilon
+            - warmup: number of warmup steps
+            - min_lr: minimum learning rate to be the starting point for warmup phase
+            - defaults: a dict of default for group values
+        '''
+        defaults = {} if defaults is None else defaults
+        defaults.update({
+            warmup : warmup,
+            min_lr : min_lr,
+            })
+        
+        super().__init__(params, betas, lr, eps, weight_decay, optimized_update, defaults)
+    
+    def get_lr(self, state: Dict[str, any], group: Dict[str, any]):
+        # if current step is in warmup stage
+        if group['warmup'] > state['step']:
+            # linearly increasing lr from 0 to alpha
+            return min_lr + state['step'] * group['lr'] / group['warmup']
+        else:
+            return group['lr']
