@@ -19,3 +19,5 @@ Starting from the basics of Pytorch Deep Learning
 #### <a href=https://github.com/KevinTheRainmaker/Pytorch_DeepLearning/blob/main/02_Optimizers/01_Adam.ipynb>01) Adam</a>
 
 #### <a href=https://github.com/KevinTheRainmaker/Pytorch_DeepLearning/blob/main/02_Optimizers/02_AMSGrad.ipynb>02) AMSGrad</a>
+
+#### <a href=https://github.com/KevinTheRainmaker/Pytorch_DeepLearning/blob/main/02_Optimizers/03_Adam_with_WarmUp.ipynb>03) Adam with WarmUp</a>
