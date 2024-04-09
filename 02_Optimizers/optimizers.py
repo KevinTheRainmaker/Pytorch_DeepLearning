@@ -230,3 +230,57 @@ class Adam(GenericAdaptiveOptimizer):
         
         # perform adam update
         self.update_adam(state, group, param, m, v)
+        
+class AMSGrad(Adam):
+    def __init__(self, params, lr: float = 1e-3, 
+                 betas: Tuple[float, float] = (0.9, 0.999), 
+                 eps: float = 1e-16, weight_decay: WeightDecay = WeightDecay(), 
+                 optimized_update: bool = True, amsgrad: bool = True,
+                 defaults: Optional[Dict[str, Any]] = None):
+        '''
+        Initialize the Optimizer
+            - params: the list of parameters
+            - lr: learning rate alpha
+            - betas: tuple of (beta_1, beta_2)
+            - eps: epsilon
+            - weight_decay: instance of class WeightDecay
+            - optimized_update: a flag whether to optimize the bias correction 
+                                of the second moment by doing it after adding epsilon
+            - amsgrad: a flag indicating whether to use AMSGrad or fallback to plain Adam
+            - defaults: a dict of default for group values
+        '''
+        defaults = {} if defaults is None else defaults
+        defaults.update(dict(amsgrad=amsgrad))
+        
+        super().__init__(params, lr, betas, eps, weight_decay, optimized_update, defaults)
+        
+    def init_state(self, state: Dict[str, Any], group: Dict[str, Any], param: nn.Parameter):
+        '''
+        Initialize a parameter state
+            - state: the optimizer state of the parameter (tensor)
+            - group: stores optimizer attributes of the parameter group
+            - param: the parameter tensor theta at t-1
+        '''
+        # Enteding Adam opt
+        super().init_state(state, group, param)
+        
+        # if amsgrad = True, maintain the maximum of exponential moving average of squared gradient
+        if group['amsgrad']:
+            state['max_exp_avg_sqrd'] = torch.zeros_like(param, memory_format=torch.preserve_format)
+    
+    def calc_mv(self, state: Dict[str, Any], group: Dict[str, Any], grad: Tensor):
+        '''
+        Calculate m_t and v_t or max(v1, v2, ..., vt)
+            - state: the optimizer state of the parameter (tensor)
+            - group: stores optimizer attributes of the parameter group
+            - grad: current gradient tensor g_t for theta at t-1
+        '''
+        m, v = super().calc_mv(state, group, grad)
+        
+        # if amsgrad, get max(v1, v2, ..., vt)
+        if group['amsgrad']:
+            v_max = state['max_exp_avg_sqrd']
+            torch.maximum(v_max, v, out=v_max)
+            return m, v_max
+        else:
+            return m, v
